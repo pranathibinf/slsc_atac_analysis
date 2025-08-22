@@ -1,0 +1,29 @@
+task: You have been given subsampled ATAC-seq data from SCLC samples (FFPE Never-met,
+  FFPE Met-associated, and FOXA2+ PDX). Using the provided paired-end FASTQ files
+  and the analysis outputs, answer the following.
+questions:
+- id: q1
+  stage: quality_control
+  text: After adapter removal, what percentage of reads passed filtering in sample
+    SRX26680004?
+  answer_type: numeric_percent
+  tolerance: 0.5
+- id: q2
+  stage: alignment
+  text: How many properly paired primary reads are mapped (not QC-fail, not duplicate)
+    in sample SRX26680000?
+  answer_type: integer_exact
+- id: q3
+  stage: quality_control
+  text: What is the duplication rate (percent) reported by fastp for sample SRX26680004?
+  answer_type: numeric_percent
+  tolerance: 0.1
+- id: q4
+  stage: peak_calling
+  text: How many significant peaks were called by MACS (narrowPeak) for sample SRX26680000?
+  answer_type: integer_exact
+- id: q5
+  stage: qc
+  text: What is the FRiP (Fraction of Reads in Peaks, percent) for sample SRX26680000?
+  answer_type: numeric_percent
+  tolerance: 0.5
