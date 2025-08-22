@@ -1,4 +1,4 @@
-# Sclc-ATAC-seq analysis
+# sclc-atac_seq analysis
 ## 1. Data sources
 This project reproduces a minimal, offline **ATAC-seq** workflow using subsampled reads (<1 GB each) from the SCLC study:
 
