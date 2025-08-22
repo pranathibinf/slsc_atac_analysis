@@ -1,7 +1,7 @@
 paper_title: "FOXA2 promotes metastatic competence in small cell lung cancer"
 doi: 0.1038/s41467-025-60141-5 
 data_source: 
-- "SRA: SRX26680000–SRX26680004" 
+- "SRA: SRX26680000–SRX26680004" - 3 subsamples in total used
 - "Reference genomes downloaded separately (Ensembl / UCSC)"
 domain: ATAC_seq
 ref_genome: 
