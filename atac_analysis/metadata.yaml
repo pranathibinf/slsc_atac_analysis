@@ -1,0 +1,17 @@
+paper_title: "FOXA2 promotes metastatic competence in small cell lung cancer"
+doi: 0.1038/s41467-025-60141-5 
+data_source: 
+- "SRA: SRX26680000–SRX26680004" 
+- "Reference genomes downloaded separately (Ensembl / UCSC)"
+domain: ATAC_seq
+ref_genome: 
+  - "Homo sapiens GRCh38/hg38 (Ensembl release 109)"
+  - "Mus musculus GRCm38/mm10 (Ensembl release 98)"
+tools:
+  - fastp 0.23.4
+  - bwa 0.7.19
+  - samtools 1.20
+  - bedtools 2.31.0
+  - macs3 3.0.3
+estimated_runtime_minutes: 540
+estimated_time_for_human: 600
