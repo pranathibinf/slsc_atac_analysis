@@ -52,6 +52,8 @@ sclc_atac_analysis/
 ```bash
 conda create -n atac-mini -y python=3.11
 conda activate atac-mini
+```
+```bash
 # tools via brew/apt/conda as you prefer; macs3 via pip works well:
 python3 -m pip install macs3==3.0.3 pyyaml
 ```
