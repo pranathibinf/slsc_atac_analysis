@@ -7,16 +7,15 @@ This project reproduces a minimal, offline **ATAC-seq** workflow using subsample
 - **Paper:** Kawasaki K, Salehi S, Zhan YA, Chen K, *et al.* **FOXA2 promotes metastatic competence in small cell lung cancer.** *Nat Commun* 2025;16:4865.
 - **Assay:** ATAC-seq (paired-end, NovaSeq 6000)
 
-**Subset analyzed (3 samples used for this repo):**
+**Subset actually used for this repo:**
+	•	SRX26680000 — FFPE, Never-met primary tumor (rep1)
+	•	Input: one paired SRR subsampled to <1 GB each
+	•	Reference: hg38
 
-| GSM        | SRX         | Description                                | Reference |
-|------------|-------------|--------------------------------------------|-----------|
-| GSM8622646 | SRX26680000 | FFPE — Never-met primary tumor, rep1       | hg38      |
-| GSM8622648 | SRX26680002 | FFPE — Met-associated primary tumor, rep1  | hg38      |
-| GSM8622650 | SRX26680004 | PDX — FOXA2+ Lx101, rep1                   | mm10      |
+**Note:** Other SRX/SRR files from the study are listed in GEO but not used in this repo. Only the above subsampled pair is processed end-to-end in the workflow.
 
 Subsampled FASTQs are placed in `atac_analysis/data/processed/` and used as the inputs for the pipeline. No network access is required to run the workflow.
-  
+
 ## 2. Repository layout
 ```bash
 sclc_atac_analysis/
