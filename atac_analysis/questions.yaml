@@ -1,29 +1,29 @@
-task: You have been given subsampled ATAC-seq data from SCLC samples (FFPE Never-met,
-  FFPE Met-associated, and FOXA2+ PDX). Using the provided paired-end FASTQ files
-  and the analysis outputs, answer the following.
+task: You have been given subsampled ATAC-seq data from an FFPE primary SCLC tumor
+  (SRX26680000). Using the provided paired-end FASTQ files and generated outputs,
+  answer the following.
 questions:
 - id: q1
   stage: quality_control
-  text: After adapter removal, what percentage of reads passed filtering in sample
-    SRX26680004?
+  text: After adapter removal, what percentage of reads passed quality filtering in
+    SRX26680000?
   answer_type: numeric_percent
   tolerance: 0.5
 - id: q2
   stage: alignment
-  text: How many properly paired primary reads are mapped (not QC-fail, not duplicate)
-    in sample SRX26680000?
+  text: In SRX26680000, how many properly paired primary reads mapped to the nuclear
+    genome (excluding QC-fail and duplicates)?
   answer_type: integer_exact
 - id: q3
-  stage: quality_control
-  text: What is the duplication rate (percent) reported by fastp for sample SRX26680004?
-  answer_type: numeric_percent
-  tolerance: 0.1
+  stage: chromatin_accessibility
+  text: Which chromosome shows the highest number of accessible regions (peak count)
+    in SRX26680000?
+  answer_type: string_exact
 - id: q4
-  stage: peak_calling
-  text: How many significant peaks were called by MACS (narrowPeak) for sample SRX26680000?
+  stage: chromatin_accessibility
+  text: What is the median peak length (bp) among MACS narrowPeak calls for SRX26680000?
   answer_type: integer_exact
 - id: q5
   stage: qc
-  text: What is the FRiP (Fraction of Reads in Peaks, percent) for sample SRX26680000?
+  text: What is the FRiP (Fraction of Reads in Peaks, percent) for SRX26680000?
   answer_type: numeric_percent
   tolerance: 0.5
