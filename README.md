@@ -1,6 +1,6 @@
 # slsc-atac_seq analysis
 ## 1. Data sources
-This project reproduces a minimal, offline **ATAC-seq** workflow using subsampled reads (<1 GB each) from the SCLC study:
+This repo demonstrates a minimal ATAC-seq workflow using one subsampled paired-end dataset (SRX26680000, FFPE Never-met SCLC tumor, aligned to hg38).
 
 - **GEO Series:** **GSE281523** — *FFPE-ATAC and PDX-ATAC sequence data of small cell lung cancer*
 - **BioProject:** **PRJNA1184329**
@@ -22,9 +22,9 @@ sclc_atac_analysis/
 ├── README.md
 └── atac_analysis/
     ├── data/
-    │   ├── raw/          # full FASTQs from SRA
+    │   ├── raw/          # FASTq from SRA
     │   └── processed/    # subsampled FASTQs (<1 GB each) used by the workflow
-    ├── refs/             # hg38/mm10 + indexes + blacklists
+    ├── refs/             # hg38 + indexes + blacklists
     ├── align/            # BAMs
     ├── peaks/            # MACS peaks
     ├── qc/               # fastp reports + frip.tsv
@@ -34,7 +34,7 @@ sclc_atac_analysis/
     ├── answers.yaml
     └── workflow/
         ├── 01_fetch_sra.sh      # download FASTQs from SRA
-        ├── 02_build_refs.sh     # build hg38/mm10 + blacklists
+        ├── 02_build_refs.sh     # build hg38 + blacklists
         ├── run_pipeline_min.sh  # trim → align → dedup → peaks → FRiP
         ├── make_qna.py          # generates questions/answers from outputs
         └── outputs/             # figures/zips, if any
@@ -62,10 +62,6 @@ Sub-sampled reads placed like this:
 atac_analysis/data/processed/
 ├─ SRX26680000_R1.sub.fastq.gz
 ├─ SRX26680000_R2.sub.fastq.gz
-├─ SRX26680002_R1.sub.fastq.gz
-├─ SRX26680002_R2.sub.fastq.gz
-├─ SRX26680004_R1.sub.fastq.gz
-└─ SRX26680004_R2.sub.fastq.gz
 ```
 If you want to (re)download & subsample from SRA:
 ```bash
@@ -79,7 +75,6 @@ PROJECT="../.." ./01_fetch_sra.sh
 ```bash
 atac_analysis/refs/
   hg38.fa, hg38.{amb,ann,bwt,pac,sa}, hg38.chrom.sizes, hg38.blacklist.bed
-  mm10.fa, mm10.{amb,ann,bwt,pac,sa}, mm10.chrom.sizes, mm10.blacklist.bed
 ```
 To build from scratch:
 ```bash
@@ -121,7 +116,5 @@ zcat atac_analysis/data/processed/SRX26680000_R1.sub.fastq.gz | wc -l
 ```
 
 ## 8. Notes:
-	•	PDX (SRX26680004) is aligned to mm10 per the paper’s outline for mouse PDX.
 	•	FRiP calculation uses properly paired, primary, mapped, non-dup reads only and robust fragment derivation.
 	•	Peak calling uses MACS in BAMPE mode with --pvalue 1e-3, --nomodel, --shift -100, --extsize 200, and ENCODE blacklists.
-	•	Estimated runtime for the three subsampled samples: ~540–600 minutes (9–10 h) depending on CPU/IO.
