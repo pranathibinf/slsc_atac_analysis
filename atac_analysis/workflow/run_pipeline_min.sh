@@ -3,6 +3,7 @@
 # Steps: fastp → bwa mem → name-sort → fixmate → coord-sort → markdup → MACS → FRiP
 set -euo pipefail
 
+# -------------------------- config --------------------------------
 PROJECT="${PROJECT:-$(cd "$(dirname "$0")/.." && pwd)}"
 THREADS="${THREADS:-8}"
 FORCE="${FORCE:-0}"   # 1 = redo even if outputs exist
@@ -14,26 +15,63 @@ ALIGN="$PROJECT/align"
 PEAKS="$PROJECT/peaks"
 QC="$PROJECT/qc"
 
-SAMPLES=("SRX26680000" "SRX26680002" "SRX26680004")  # NeverMet, Met, FOXA2+ PDX
+# Default samples 
+SAMPLES=(SRX26680000)
+# If SAMPLES is provided as a space-separated env var, convert to array
+if [[ -n "${SAMPLES:-}" && "$SAMPLES" != *"("*")"* ]]; then
+  read -r -a SAMPLES <<< "$SAMPLES"
+fi
 
 mkdir -p "$WORK" "$ALIGN" "$PEAKS" "$QC"
 
+# -------------------------- tool checks ---------------------------------------
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "ERROR: '$1' not found"; exit 1; }; }
 need fastp; need bwa; need samtools; need bedtools
-# MACS detect
+
+# macs3 or macs2
 MACS_BIN=""
 if command -v macs3 >/dev/null 2>&1; then MACS_BIN="macs3";
 elif command -v macs2 >/dev/null 2>&1; then MACS_BIN="macs2";
 else echo "ERROR: need macs3 or macs2 installed"; exit 1; fi
 
-genome_for() {
-  case "$1" in
-    SRX26680004) echo "mm10" ;;  # PDX mouse
-    *)           echo "hg38" ;;  # FFPE human
-  esac
+# Map sample → genome 
+genome_for() { echo "hg38"; }
+
+# ------------------------------- helpers --------------------------------------
+call_and_filter() {
+  local ACC="$1"
+  local genome_size_flag="$2"    # hs (hg38) / mm (mm10)
+  local blacklist="$3"
+
+  local BAM="$ALIGN/${ACC}.dedup.bam"
+  local OUTPFX="$PEAKS/${ACC}"
+  local RAWNP="${OUTPFX}_peaks.narrowPeak"
+  local FILT="${PEAKS}/${ACC}.peaks.filt.bed"
+
+  if [[ ! -f "$BAM" ]]; then
+    echo "$ACC: skip (no BAM)"
+    return 0
+  fi
+
+  if [[ "$FORCE" -eq 1 || ! -f "$RAWNP" ]]; then
+    echo "$ACC: calling peaks"
+    $MACS_BIN callpeak -t "$BAM" -f BAMPE -g "$genome_size_flag" -n "$ACC" --outdir "$PEAKS" \
+      --pvalue 1e-3 --nomodel --shift -100 --extsize 200 --keep-dup all
+  else
+    echo "$ACC: peaks exist -> skip callpeak"
+  fi
+
+  if [[ -f "$RAWNP" && -f "$blacklist" ]]; then
+    if [[ "$FORCE" -eq 1 || ! -f "$FILT" ]]; then
+      bedtools intersect -v -a "$RAWNP" -b "$blacklist" > "$FILT"
+      echo "$ACC: wrote blacklist-filtered peaks -> $FILT"
+    else
+      echo "$ACC: filtered peaks exist -> skip"
+    fi
+  fi
 }
 
-# ------------------ 1) TRIM/QC ------------------
+# === [1/4] fastp (trim/QC) ===
 echo "=== [1/4] fastp (trim/QC) ==="
 for ACC in "${SAMPLES[@]}"; do
   IN1="$SUB/${ACC}_R1.sub.fastq.gz"
@@ -53,114 +91,90 @@ for ACC in "${SAMPLES[@]}"; do
   fi
 done
 
-# ----------- 2) ALIGN → nsort → fixmate → sort → markdup -----------
+# === [2/4] bwa mem → fixmate chain ===
 echo "=== [2/4] bwa mem → fixmate chain ==="
-
-clean_align_outputs () {
-  local ACC="$1"
-  rm -f "$ALIGN/${ACC}.nsort.bam" \
-        "$ALIGN/${ACC}.fixmate.bam" \
-        "$ALIGN/${ACC}.sorted.bam" "$ALIGN/${ACC}.sorted.bam.bai" \
-        "$ALIGN/${ACC}.dedup.bam"  "$ALIGN/${ACC}.dedup.bam.bai" 2>/dev/null || true
-}
-
 for ACC in "${SAMPLES[@]}"; do
   REFBASE="$(genome_for "$ACC")"
-  REFPREFIX="$REFDIR/${REFBASE}"  # bwa index prefix (no .fa)
+  REFPREFIX="$REFDIR/${REFBASE}"  # IMPORTANT: prefix (no .fa)
   [[ -f "${REFPREFIX}.bwt" ]] || { echo "Missing BWA index for $REFBASE at ${REFPREFIX}.*"; exit 1; }
 
   TRIM1="$WORK/${ACC}_R1.trim.fastq.gz"
   TRIM2="$WORK/${ACC}_R2.trim.fastq.gz"
-
   NSORT="$ALIGN/${ACC}.nsort.bam"
   FIXM="$ALIGN/${ACC}.fixmate.bam"
   SORTB="$ALIGN/${ACC}.sorted.bam"
   DEDUP="$ALIGN/${ACC}.dedup.bam"
 
-  if [[ "$FORCE" -eq 1 ]]; then clean_align_outputs "$ACC"; fi
+  if [[ "$FORCE" -eq 1 ]]; then
+    rm -f "$NSORT" "$FIXM" "$SORTB" "$SORTB.bai" "$DEDUP" "$DEDUP.bai" 2>/dev/null || true
+  fi
+
   if [[ -f "$DEDUP" && -f "$DEDUP.bai" ]]; then
     echo "$ACC: dedup BAM exists -> skip alignment"
     continue
   fi
 
-  if [[ ! -f "$NSORT" ]]; then
-    echo "$ACC: bwa mem → name-sort"
-    bwa mem -t "$THREADS" "$REFPREFIX" "$TRIM1" "$TRIM2" \
-      | samtools view -b - \
-      | samtools sort -n -@ "$THREADS" -o "$NSORT" -
-  else
-    echo "$ACC: using existing name-sorted BAM"
-  fi
+  echo "$ACC: bwa mem"
+  bwa mem -t "$THREADS" "$REFPREFIX" "$TRIM1" "$TRIM2" \
+    | samtools view -bh -F 0x4 - \
+    | samtools sort -n -@ "$THREADS" -o "$NSORT" -
 
-  if [[ ! -f "$FIXM" ]]; then
-    echo "$ACC: samtools fixmate"
-    samtools fixmate -m "$NSORT" "$FIXM"
-  else
-    echo "$ACC: using existing fixmate BAM"
-  fi
+  echo "$ACC: fixmate"
+  samtools fixmate -m "$NSORT" "$FIXM"
 
-  echo "$ACC: coordinate sort (rebuild from fixmate)"
+  echo "$ACC: position sort"
   samtools sort -@ "$THREADS" -o "$SORTB" "$FIXM"
   samtools index "$SORTB"
 
   echo "$ACC: markdup (remove PCR dups)"
-  samtools markdup -r "$SORTB" "$DEDUP"
+  samtools markdup -r -@ "$THREADS" "$SORTB" "$DEDUP"
   samtools index "$DEDUP"
 
-  rm -f "$NSORT" "$FIXM"
+  rm -f "$NSORT" "$FIXM" "$SORTB" "$SORTB.bai" 2>/dev/null || true
 done
 
-# ------------------ 3) PEAKS + blacklist ------------------
-echo "=== [3/4] $MACS_BIN peaks + blacklist ==="
-call_and_filter () {
-  local ACC="$1" GSIZE="$2" BLFILE="$3"
-  local RAW="$PEAKS/${ACC}_peaks.narrowPeak"
-  local FILT="$PEAKS/${ACC}.peaks.filt.bed"
-  local BAM="$ALIGN/${ACC}.dedup.bam"
+# === [3/4] macs3 peaks + blacklist ===
+echo "=== [3/4] macs3 peaks + blacklist ==="
+for ACC in "${SAMPLES[@]}"; do
+  # hg38 only for now (PDX/mm10 can be added later if needed)
+  call_and_filter "$ACC" hs "$REFDIR/hg38.blacklist.bed"
+done
 
-  if [[ "$FORCE" -eq 1 || ! -f "$RAW" ]]; then
-    echo "$ACC: calling peaks"
-    "$MACS_BIN" callpeak -t "$BAM" \
-      -f BAMPE -g "$GSIZE" -n "$ACC" --outdir "$PEAKS" \
-      --nomodel --shift -100 --extsize 200 --keep-dup all --pvalue 1e-3 >/dev/null
-  else
-    echo "$ACC: peaks exist -> skip callpeak"
-  fi
-
-  if [[ "$FORCE" -eq 1 || ! -f "$FILT" ]]; then
-    if [[ -f "$REFDIR/$BLFILE" ]]; then
-      echo "$ACC: blacklist filter ($BLFILE)"
-      bedtools intersect -v -a "$RAW" -b "$REFDIR/$BLFILE" > "$FILT"
-    else
-      echo "WARN: $BLFILE missing; copying raw peaks."
-      cp -f "$RAW" "$FILT"
-    fi
-  else
-    echo "$ACC: filtered peaks exist -> skip"
-  fi
-}
-call_and_filter "SRX26680000" hs "hg38.blacklist.bed"
-call_and_filter "SRX26680002" hs "hg38.blacklist.bed"
-call_and_filter "SRX26680004" mm "mm10.blacklist.bed"
-
-# ------------------ 4) FRiP (robust) ------------------
+# === [4/4] FRiP ===
 echo "=== [4/4] FRiP ==="
-OUTTSV="$QC/frip.tsv"
-echo -e "Sample\tInPeaks\tTotal\tFRiP" > "$OUTTSV"
+FRIP="$QC/frip.tsv"
+echo -e "sample\treads_in_peaks\tproper_pairs\tfrip" > "$FRIP"
+
 for ACC in "${SAMPLES[@]}"; do
   BAM="$ALIGN/${ACC}.dedup.bam"
-  FRAGS="$ALIGN/${ACC}.frags.bed"
+  NP="${PEAKS}/${ACC}_peaks.narrowPeak"
 
-  # proper pair, primary, mapped, not QC-fail, not dup
-  samtools view -@ "$THREADS" -b -f 0x2 -F 0x904 "$BAM" \
-  | bedtools bamtobed -bedpe -i - \
-  | awk 'BEGIN{OFS="\t"} ($1==$4) {s=($2<$5)?$2:$5; e=($3>$6)?$3:$6; if (s>=0 && e>s) print $1,s,e; }' \
-  > "$FRAGS"
+  if [[ ! -f "$BAM" || ! -f "$NP" ]]; then
+    echo "$ACC: skip FRiP (missing BAM or peaks)"
+    continue
+  fi
 
-  TOTAL=$(wc -l < "$FRAGS")
-  OVER=$(bedtools intersect -u -a "$FRAGS" -b "$PEAKS/${ACC}.peaks.filt.bed" | wc -l)
-  awk -v a="$ACC" -v o="$OVER" -v t="$TOTAL" 'BEGIN{printf "%s\t%d\t%d\t%.4f\n", a,o,t,(t?o/t:0)}' >> "$OUTTSV"
+  PP=$(samtools view -c -f 0x2 -F 0x904 "$BAM")
+  if [[ "$PP" -eq 0 ]]; then
+    echo -e "${ACC}\t0\t0\t0.0" >> "$FRIP"
+    continue
+  fi
+
+  QNAME="$ALIGN/${ACC}.qname.bam"
+  FRAG="$ALIGN/${ACC}.frags.bed"
+  samtools view -u -f 0x2 -F 0x904 "$BAM" \
+    | samtools sort -n -@ "$THREADS" -o "$QNAME" -
+  bedtools bamtobed -bedpe -i "$QNAME" \
+    | awk '($1!="." && $2>=0 && $3>$2){print $1"\t"$2"\t"$3}' > "$FRAG"
+
+  INPK=$(bedtools intersect -u -a "$FRAG" -b "$NP" | wc -l | tr -d ' ')
+  FRIP_VAL=$(python3 - <<PY
+pp=int("$PP"); ip=int("$INPK")
+print(0.0 if pp==0 else round(ip/pp,4))
+PY
+)
+  echo -e "${ACC}\t${INPK}\t${PP}\t${FRIP_VAL}" >> "$FRIP"
 done
 
-echo "FRiP -> $OUTTSV"
+echo "FRiP -> $FRIP"
 echo "Done ✅"
