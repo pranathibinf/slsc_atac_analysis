@@ -1,31 +1,30 @@
-task: >
-  You have been given subsampled ATAC-seq data from the SCLC study.  
-  This task is scoped to a single paired-end sample (SRX26680000, FFPE Never-met primary tumor).  
-  Using the provided FASTQ files and generated outputs, answer the following biological questions.
+task: 'You have been given subsampled ATAC-seq data from an FFPE primary SCLC tumor
+  (SRX26680000). Using the provided paired-end FASTQs and generated outputs, answer:'
 questions:
 - id: q1
   stage: quality_control
-  text: After adapter removal, what percentage of reads passed filtering in sample
-    SRX26680000?
+  text: After adapter removal, what percentage of reads passed filtering?
   answer_type: numeric_percent
   tolerance: 0.5
 - id: q2
   stage: alignment
-  text: How many properly paired primary reads are mapped (excluding QC-fail and duplicates)
-    in SRX26680000?
+  text: How many properly paired, primary, mapped, non-duplicate nuclear reads are
+    in the sample?
   answer_type: integer_exact
-  tolerance: 1000
+  tolerance_note: "\xB11% or \xB15,000 reads (whichever is larger)."
 - id: q3
   stage: quality_control
-  text: What is the duplication rate (percent) reported by fastp for SRX26680000?
+  text: What is the library duplication rate (percent) reported by fastp?
   answer_type: numeric_percent
-  tolerance: 0.5
+  tolerance: 0.2
 - id: q4
   stage: peak_calling
-  text: How many significant peaks were called by MACS (narrowPeak) for SRX26680000?
+  text: How many significant peaks were called by MACS (narrowPeak)?
   answer_type: integer_exact
+  tolerance_note: "\xB12% (min \xB1200 peaks)."
 - id: q5
   stage: qc
-  text: What is the FRiP (Fraction of Reads in Peaks, percent) for SRX26680000?
+  text: What is the FRiP (Fraction of Reads in Peaks, percent) using blacklist-filtered
+    peaks and properly paired, primary, mapped, non-duplicate reads?
   answer_type: numeric_percent
-  tolerance: 1.0
+  tolerance: 0.5
