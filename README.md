@@ -116,5 +116,5 @@ zcat atac_analysis/data/processed/SRX26680000_R1.sub.fastq.gz | wc -l
 ```
 
 ## 8. Notes:
-	•	FRiP calculation uses properly paired, primary, mapped, non-dup reads only and robust fragment derivation.
+	•	FRiP calculation uses properly paired, primary, mapped, non-dup reads only and robust fragment derivation. FRiP computed using nuclear fragments only (chrM excluded)
 	•	Peak calling uses MACS in BAMPE mode with --pvalue 1e-3, --nomodel, --shift -100, --extsize 200, and ENCODE blacklists.
