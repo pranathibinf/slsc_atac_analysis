@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# -------------------- Config  --------------------
+# -------------------- Config (env-overridable) --------------------
 PROJECT="${PROJECT:-$(cd "$(dirname "$0")/.." && pwd)}"
 THREADS="${THREADS:-8}"
 FORCE="${FORCE:-0}"          # 1 = redo even if outputs exist
@@ -135,7 +135,6 @@ done
 
 # -------------------- 4) FRiP (fragments ∩ filtered peaks) --------------------
 echo "=== [4/4] FRiP ==="
-# fresh header every run (single-sample task)
 echo -e "sample\tRINP\tPP_nuclear\tFRiP" > "$QC/frip.tsv"
 
 for ACC in $SAMPLES; do
@@ -143,21 +142,19 @@ for ACC in $SAMPLES; do
   FILT="$PEAKS/${ACC}.peaks.filt.bed"
   FRAGS="$WORK/${ACC}.frags.bed"
 
-  # Properly paired, primary, mapped, non-dup -> BEDPE -> fragments
+  # Properly paired, primary, mapped, non-dup -> name-sort -> BEDPE -> fragments
   samtools view -@ "$THREADS" -f 0x2 -F 0x904 -b "$DEDUP" \
+  | samtools sort -n -@ "$THREADS" - \
   | bedtools bamtobed -bedpe -mate1 \
-  | awk 'BEGIN{OFS="\t"} ($1 !~ /_/) && $2>=0 && $6>$2 {print $1,$2,$6}' \
+  | awk 'BEGIN{OFS="\t"} ($1!="chrM" && $1 !~ /_/) && $2>=0 && $6>$2 {print $1,$2,$6}' \
   > "$FRAGS"
 
-  # RINP = fragments overlapping filtered peaks
+  # RINP and PP counts
   RINP=$(bedtools intersect -u -a "$FRAGS" -b "$FILT" | wc -l | tr -d ' ')
-  # PP_nuclear = count properly paired, primary, mapped, non-dup
   PP=$(samtools view -c -f 0x2 -F 0x904 "$DEDUP")
-  # FRiP as fraction (0-1); write as decimal, Q&A will convert to %
-  FRIP=$(python3 - <<PY
-rinp=$RINP; pp=$PP
-print(f"{rinp/pp:.3f}" if pp>0 else "0.000")
-PY)
+
+  # FRiP as decimal (0–1)
+  FRIP=$(awk -v r="$RINP" -v p="$PP" 'BEGIN{if(p>0) printf "%.3f", r/p; else print "0.000"}')
 
   printf "%s\t%s\t%s\t%s\n" "$ACC" "$RINP" "$PP" "$FRIP" >> "$QC/frip.tsv"
   echo "FRiP -> $ACC : RINP=$RINP, PP_nuclear=$PP, FRiP=$FRIP"
